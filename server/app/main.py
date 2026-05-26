@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .pgn_parser import PgnParseError, parse_pgn
+from .stockfish_analyzer import StockfishAnalysisError, analyze_pgn
 
 
 app = FastAPI(title="CheckMateAI API")
@@ -13,6 +14,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -21,6 +23,11 @@ app.add_middleware(
 
 class ParsePgnRequest(BaseModel):
     pgn: str = Field(..., min_length=1)
+
+
+class AnalyzePgnRequest(ParsePgnRequest):
+    depth: int = Field(default=8, ge=1, le=20)
+    max_moves: int | None = Field(default=None, ge=1, le=300)
 
 
 @app.get("/api/health")
@@ -37,3 +44,16 @@ def parse_pgn_endpoint(payload: ParsePgnRequest):
         return parse_pgn(payload.pgn)
     except PgnParseError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/analyze-pgn")
+def analyze_pgn_endpoint(payload: AnalyzePgnRequest):
+    if not payload.pgn.strip():
+        raise HTTPException(status_code=400, detail="Please paste a PGN game before submitting.")
+
+    try:
+        return analyze_pgn(payload.pgn, depth=payload.depth, max_moves=payload.max_moves)
+    except PgnParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except StockfishAnalysisError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
