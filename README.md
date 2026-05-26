@@ -20,7 +20,14 @@ The first implemented slice is PGN upload and basic parsing:
 - Parse headers and moves
 - Display a structured game summary in the frontend
 
-No Stockfish, AI, auth, or database is included in this branch yet.
+The second slice adds raw Stockfish move analysis:
+
+- Send a PGN to the analysis endpoint
+- Evaluate each position before and after played moves
+- Return best move suggestions and centipawn loss
+- Display raw engine output in the frontend
+
+No move labels, AI explanations, auth, or database are included yet.
 
 ## Local Development
 
@@ -35,6 +42,12 @@ uvicorn app.main:app --reload
 ```
 
 The API runs at `http://localhost:8000`.
+
+Stockfish must be installed and available on `PATH`, or configured with:
+
+```bash
+export STOCKFISH_PATH=/path/to/stockfish
+```
 
 ### Client
 
