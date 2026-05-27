@@ -45,7 +45,13 @@ The fifth slice adds saved game storage:
 - List saved game reviews
 - Load a saved review back into the frontend
 
-No AI explanations, auth, or database are included yet.
+The sixth slice adds auth for user-owned games:
+
+- Sign up, log in, and log out with Supabase Auth
+- Save games under the authenticated user
+- Fetch and load only the current user's saved reviews
+
+No AI explanations or machine learning are included yet.
 
 ## Local Development
 
@@ -89,6 +95,13 @@ npm run dev
 ```
 
 The app runs at `http://localhost:5173`.
+
+For frontend auth, configure:
+
+```bash
+export VITE_SUPABASE_URL=https://your-project.supabase.co
+export VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
 ## Tech Stack
 

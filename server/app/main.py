@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .auth import AuthError, AuthNotConfiguredError, get_user_from_token
 from .game_storage import (
     GameStorageError,
     GameStorageNotConfiguredError,
@@ -42,6 +43,18 @@ class SaveGameRequest(BaseModel):
     analysis_result: dict = Field(...)
 
 
+def current_user(authorization: str | None) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Sign in to access saved games.")
+
+    try:
+        return get_user_from_token(authorization.removeprefix("Bearer ").strip())
+    except AuthNotConfiguredError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok"}
@@ -72,12 +85,14 @@ def analyze_pgn_endpoint(payload: AnalyzePgnRequest):
 
 
 @app.post("/api/games")
-def save_game_endpoint(payload: SaveGameRequest):
+def save_game_endpoint(payload: SaveGameRequest, authorization: str | None = Header(default=None)):
     if not payload.pgn.strip():
         raise HTTPException(status_code=400, detail="Cannot save a game without PGN text.")
 
+    user = current_user(authorization)
+
     try:
-        return save_game(payload.pgn, payload.analysis_result)
+        return save_game(payload.pgn, payload.analysis_result, user["id"])
     except GameStorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except GameStorageError as exc:
@@ -85,9 +100,11 @@ def save_game_endpoint(payload: SaveGameRequest):
 
 
 @app.get("/api/games")
-def list_games_endpoint():
+def list_games_endpoint(authorization: str | None = Header(default=None)):
+    user = current_user(authorization)
+
     try:
-        return list_games()
+        return list_games(user["id"])
     except GameStorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except GameStorageError as exc:
@@ -95,9 +112,11 @@ def list_games_endpoint():
 
 
 @app.get("/api/games/{game_id}")
-def get_game_endpoint(game_id: str):
+def get_game_endpoint(game_id: str, authorization: str | None = Header(default=None)):
+    user = current_user(authorization)
+
     try:
-        return get_game(game_id)
+        return get_game(game_id, user["id"])
     except GameStorageNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except GameStorageError as exc:

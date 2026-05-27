@@ -21,8 +21,9 @@ class GameStorageTest(unittest.TestCase):
             "analysis": [{"move": "e4"}],
         }
 
-        record = build_game_record("1. e4", analysis_result)
+        record = build_game_record("1. e4", analysis_result, "user-123")
 
+        self.assertEqual(record["user_id"], "user-123")
         self.assertEqual(record["white_player"], "Ada")
         self.assertEqual(record["black_player"], "Mikhail")
         self.assertEqual(record["result"], "1-0")
@@ -33,14 +34,14 @@ class GameStorageTest(unittest.TestCase):
     def test_build_game_record_handles_unknown_date(self):
         analysis_result = {"game": {"date": "????.??.??"}}
 
-        record = build_game_record("1. e4", analysis_result)
+        record = build_game_record("1. e4", analysis_result, "user-123")
 
         self.assertIsNone(record["game_date"])
 
     def test_list_games_requires_supabase_configuration(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(GameStorageNotConfiguredError, "Saved games are not configured"):
-                list_games()
+                list_games("user-123")
 
     def test_normalize_supabase_url_accepts_base_or_rest_url(self):
         self.assertEqual(
