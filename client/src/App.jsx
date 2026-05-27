@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase =
+  SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const SAMPLE_PGN = `[Event "Live Chess"]
 [Site "Chess.com"]
@@ -21,17 +26,48 @@ function App() {
   const [isLoadingSavedGames, setIsLoadingSavedGames] = useState(false);
   const [isSavingGame, setIsSavingGame] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [session, setSession] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [authMessage, setAuthMessage] = useState("");
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
 
   const canSubmit = useMemo(() => pgn.trim().length > 0 && !isSubmitting, [pgn, isSubmitting]);
+  const currentUser = session?.user ?? null;
 
   useEffect(() => {
-    loadSavedGames();
+    if (!supabase) {
+      setStorageMessage("Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable saved games.");
+      return undefined;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setSavedGames([]);
+      setStorageMessage("");
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (session) {
+      loadSavedGames(session);
+    }
+  }, [session]);
 
   async function requestJson(path, options = {}) {
     const response = await fetch(`${API_BASE_URL}${path}`, {
       headers: {
         "Content-Type": "application/json",
+        ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
         ...(options.headers ?? {}),
       },
       ...options,
@@ -46,11 +82,19 @@ function App() {
   }
 
   async function loadSavedGames() {
+    if (!session) {
+      setSavedGames([]);
+      setStorageMessage("Sign in to load your saved games.");
+      return;
+    }
+
     setIsLoadingSavedGames(true);
     setStorageMessage("");
 
     try {
-      const data = await requestJson("/api/games");
+      const data = await requestJson("/api/games", {
+        accessToken: session.access_token,
+      });
       setSavedGames(data);
     } catch (requestError) {
       setStorageMessage(requestError.message);
@@ -63,6 +107,10 @@ function App() {
     if (!analysisResult) {
       return;
     }
+    if (!session) {
+      setStorageMessage("Sign in to save reviewed games.");
+      return;
+    }
 
     setIsSavingGame(true);
     setStorageMessage("");
@@ -70,12 +118,13 @@ function App() {
     try {
       await requestJson("/api/games", {
         method: "POST",
+        accessToken: session.access_token,
         body: JSON.stringify({
           pgn,
           analysis_result: analysisResult,
         }),
       });
-      await loadSavedGames();
+      await loadSavedGames(session);
       setStorageMessage("Game saved.");
     } catch (requestError) {
       setStorageMessage(requestError.message);
@@ -85,11 +134,18 @@ function App() {
   }
 
   async function handleLoadSavedGame(gameId) {
+    if (!session) {
+      setStorageMessage("Sign in to load saved games.");
+      return;
+    }
+
     setError("");
     setStorageMessage("");
 
     try {
-      const savedGame = await requestJson(`/api/games/${gameId}`);
+      const savedGame = await requestJson(`/api/games/${gameId}`, {
+        accessToken: session.access_token,
+      });
       setPgn(savedGame.pgn);
       setParsedGame(savedGame.analysis_json.game);
       setAnalysisResult(savedGame.analysis_json);
@@ -97,6 +153,49 @@ function App() {
     } catch (requestError) {
       setStorageMessage(requestError.message);
     }
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+
+    if (!supabase) {
+      setAuthMessage("Supabase auth is not configured in the frontend.");
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    setAuthMessage("");
+
+    try {
+      const authAction =
+        authMode === "signup"
+          ? supabase.auth.signUp({ email, password })
+          : supabase.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await authAction;
+
+      if (authError) {
+        throw authError;
+      }
+
+      setSession(data.session);
+      setAuthMessage(authMode === "signup" ? "Account created. Check your email if confirmation is enabled." : "Signed in.");
+      setPassword("");
+    } catch (requestError) {
+      setAuthMessage(requestError.message);
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (!supabase) {
+      return;
+    }
+
+    await supabase.auth.signOut();
+    setSession(null);
+    setSavedGames([]);
+    setStorageMessage("Signed out.");
   }
 
   async function handleSubmit(event, mode = "parse") {
@@ -176,7 +275,19 @@ function App() {
           games={savedGames}
           isLoading={isLoadingSavedGames}
           message={storageMessage}
-          onRefresh={loadSavedGames}
+          currentUser={currentUser}
+          authConfigured={Boolean(supabase)}
+          authMode={authMode}
+          email={email}
+          password={password}
+          authMessage={authMessage}
+          isAuthSubmitting={isAuthSubmitting}
+          onAuthModeChange={setAuthMode}
+          onEmailChange={setEmail}
+          onPasswordChange={setPassword}
+          onAuthSubmit={handleAuthSubmit}
+          onSignOut={handleSignOut}
+          onRefresh={() => loadSavedGames(session)}
           onSelect={handleLoadSavedGame}
         />
       </section>
@@ -187,6 +298,7 @@ function App() {
             game={parsedGame}
             analysisResult={analysisResult}
             isSavingGame={isSavingGame}
+            currentUser={currentUser}
             onSaveGame={handleSaveGame}
           />
         ) : (
@@ -197,22 +309,55 @@ function App() {
   );
 }
 
-function SavedGamesPanel({ games, isLoading, message, onRefresh, onSelect }) {
+function SavedGamesPanel({
+  games,
+  isLoading,
+  message,
+  currentUser,
+  authConfigured,
+  authMode,
+  email,
+  password,
+  authMessage,
+  isAuthSubmitting,
+  onAuthModeChange,
+  onEmailChange,
+  onPasswordChange,
+  onAuthSubmit,
+  onSignOut,
+  onRefresh,
+  onSelect,
+}) {
   return (
     <aside className="saved-panel" aria-label="Saved games">
       <div className="field-header">
         <h2>Saved games</h2>
-        <button type="button" className="text-button" onClick={onRefresh}>
+        <button type="button" className="text-button" onClick={onRefresh} disabled={!currentUser}>
           Refresh
         </button>
       </div>
+
+      <AuthPanel
+        authConfigured={authConfigured}
+        currentUser={currentUser}
+        authMode={authMode}
+        email={email}
+        password={password}
+        authMessage={authMessage}
+        isAuthSubmitting={isAuthSubmitting}
+        onAuthModeChange={onAuthModeChange}
+        onEmailChange={onEmailChange}
+        onPasswordChange={onPasswordChange}
+        onAuthSubmit={onAuthSubmit}
+        onSignOut={onSignOut}
+      />
 
       {message ? <p className="storage-message">{message}</p> : null}
 
       {isLoading ? <p className="saved-empty">Loading saved games...</p> : null}
 
-      {!isLoading && games.length === 0 ? (
-        <p className="saved-empty">Saved reviews will appear here after Supabase is configured.</p>
+      {!isLoading && currentUser && games.length === 0 ? (
+        <p className="saved-empty">Your saved reviews will appear here.</p>
       ) : null}
 
       <div className="saved-list">
@@ -231,6 +376,78 @@ function SavedGamesPanel({ games, isLoading, message, onRefresh, onSelect }) {
   );
 }
 
+function AuthPanel({
+  authConfigured,
+  currentUser,
+  authMode,
+  email,
+  password,
+  authMessage,
+  isAuthSubmitting,
+  onAuthModeChange,
+  onEmailChange,
+  onPasswordChange,
+  onAuthSubmit,
+  onSignOut,
+}) {
+  if (!authConfigured) {
+    return <p className="saved-empty">Set frontend Supabase env vars to sign in.</p>;
+  }
+
+  if (currentUser) {
+    return (
+      <div className="auth-status">
+        <div>
+          <span>Signed in</span>
+          <strong>{currentUser.email}</strong>
+        </div>
+        <button type="button" className="text-button" onClick={onSignOut}>
+          Log out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="auth-form" onSubmit={onAuthSubmit}>
+      <div className="auth-tabs">
+        <button
+          type="button"
+          className={authMode === "login" ? "active" : ""}
+          onClick={() => onAuthModeChange("login")}
+        >
+          Log in
+        </button>
+        <button
+          type="button"
+          className={authMode === "signup" ? "active" : ""}
+          onClick={() => onAuthModeChange("signup")}
+        >
+          Sign up
+        </button>
+      </div>
+      <input
+        type="email"
+        value={email}
+        onChange={(event) => onEmailChange(event.target.value)}
+        placeholder="Email"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(event) => onPasswordChange(event.target.value)}
+        placeholder="Password"
+        required
+      />
+      {authMessage ? <p className="auth-message">{authMessage}</p> : null}
+      <button className="primary-button" type="submit" disabled={isAuthSubmitting}>
+        {isAuthSubmitting ? "Working..." : authMode === "signup" ? "Create account" : "Log in"}
+      </button>
+    </form>
+  );
+}
+
 function EmptyResult() {
   return (
     <div className="empty-result">
@@ -240,13 +457,14 @@ function EmptyResult() {
   );
 }
 
-function ParsedGameSummary({ game, analysisResult, isSavingGame, onSaveGame }) {
+function ParsedGameSummary({ game, analysisResult, isSavingGame, currentUser, onSaveGame }) {
   if (analysisResult) {
     return (
       <GameReview
         game={game}
         analysisResult={analysisResult}
         isSavingGame={isSavingGame}
+        currentUser={currentUser}
         onSaveGame={onSaveGame}
       />
     );
@@ -303,7 +521,7 @@ function ParsedGameSummary({ game, analysisResult, isSavingGame, onSaveGame }) {
   );
 }
 
-function GameReview({ game, analysisResult, isSavingGame, onSaveGame }) {
+function GameReview({ game, analysisResult, isSavingGame, currentUser, onSaveGame }) {
   const labelCounts = getLabelCounts(analysisResult.analysis);
 
   return (
@@ -321,8 +539,8 @@ function GameReview({ game, analysisResult, isSavingGame, onSaveGame }) {
         <div className="engine-pill">
           {analysisResult.engine.name} · Depth {analysisResult.engine.depth}
         </div>
-        <button type="button" className="save-button" onClick={onSaveGame} disabled={isSavingGame}>
-          {isSavingGame ? "Saving..." : "Save review"}
+        <button type="button" className="save-button" onClick={onSaveGame} disabled={isSavingGame || !currentUser}>
+          {currentUser ? (isSavingGame ? "Saving..." : "Save review") : "Sign in to save"}
         </button>
       </header>
 

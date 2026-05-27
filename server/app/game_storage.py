@@ -20,10 +20,11 @@ class GameStorageNotConfiguredError(GameStorageError):
     pass
 
 
-def build_game_record(pgn: str, analysis_result: dict[str, Any]) -> dict[str, Any]:
+def build_game_record(pgn: str, analysis_result: dict[str, Any], user_id: str) -> dict[str, Any]:
     game = analysis_result.get("game") or {}
 
     return {
+        "user_id": user_id,
         "white_player": game.get("white", "Unknown"),
         "black_player": game.get("black", "Unknown"),
         "result": game.get("result", "*"),
@@ -33,8 +34,8 @@ def build_game_record(pgn: str, analysis_result: dict[str, Any]) -> dict[str, An
     }
 
 
-def save_game(pgn: str, analysis_result: dict[str, Any]) -> dict[str, Any]:
-    record = build_game_record(pgn, analysis_result)
+def save_game(pgn: str, analysis_result: dict[str, Any], user_id: str) -> dict[str, Any]:
+    record = build_game_record(pgn, analysis_result, user_id)
     response = _supabase_request(
         "",
         method="POST",
@@ -48,10 +49,11 @@ def save_game(pgn: str, analysis_result: dict[str, Any]) -> dict[str, Any]:
     raise GameStorageError("Supabase did not return the saved game.")
 
 
-def list_games() -> list[dict[str, Any]]:
+def list_games(user_id: str) -> list[dict[str, Any]]:
     query = urllib.parse.urlencode(
         {
             "select": "id,white_player,black_player,result,game_date,created_at",
+            "user_id": f"eq.{user_id}",
             "order": "created_at.desc",
         }
     )
@@ -59,10 +61,11 @@ def list_games() -> list[dict[str, Any]]:
     return response if isinstance(response, list) else []
 
 
-def get_game(game_id: str) -> dict[str, Any]:
+def get_game(game_id: str, user_id: str) -> dict[str, Any]:
     query = urllib.parse.urlencode(
         {
             "id": f"eq.{game_id}",
+            "user_id": f"eq.{user_id}",
             "select": "*",
             "limit": "1",
         }
