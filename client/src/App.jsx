@@ -189,6 +189,7 @@ function EngineAnalysisTable({ analysisResult }) {
             <tr>
               <th>Move</th>
               <th>Played</th>
+              <th>Label</th>
               <th>Eval before</th>
               <th>Eval after</th>
               <th>Best move</th>
@@ -203,6 +204,11 @@ function EngineAnalysisTable({ analysisResult }) {
                   {move.side === "black" ? "..." : "."}
                 </td>
                 <td>{move.move}</td>
+                <td>
+                  <span className={`move-label move-label-${slugify(move.classification?.label)}`}>
+                    {move.classification?.label ?? "Good"}
+                  </span>
+                </td>
                 <td>{formatEvaluation(move.evaluationBefore)}</td>
                 <td>{formatEvaluation(move.evaluationAfter)}</td>
                 <td>{move.bestMove?.san ?? ""}</td>
@@ -223,6 +229,10 @@ function formatEvaluation(evaluation) {
 
   const pawns = evaluation.cp / 100;
   return pawns > 0 ? `+${pawns.toFixed(2)}` : pawns.toFixed(2);
+}
+
+function slugify(value = "") {
+  return value.toLowerCase().replace(/\s+/g, "-");
 }
 
 export default App;
