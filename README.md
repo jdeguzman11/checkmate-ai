@@ -39,6 +39,12 @@ The fourth slice adds a readable game review UI:
 - Summarize move counts by classification
 - Display a move-by-move review list with labels, evals, and best moves
 
+The fifth slice adds saved game storage:
+
+- Save analyzed games to Supabase
+- List saved game reviews
+- Load a saved review back into the frontend
+
 No AI explanations, auth, or database are included yet.
 
 ## Local Development
@@ -59,6 +65,19 @@ Stockfish must be installed and available on `PATH`, or configured with:
 
 ```bash
 export STOCKFISH_PATH=/path/to/stockfish
+```
+
+Saved game storage uses Supabase. Create the table with:
+
+```bash
+server/supabase_schema.sql
+```
+
+Then configure:
+
+```bash
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 ### Client

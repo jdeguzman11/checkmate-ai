@@ -74,6 +74,7 @@ h1 {
 .pgn-panel,
 .summary-panel,
 .review-panel,
+.saved-panel,
 .empty-result {
   border: 1px solid #d7d0c2;
   border-radius: 8px;
@@ -85,6 +86,70 @@ h1 {
   display: grid;
   gap: 16px;
   padding: 22px;
+}
+
+.saved-panel {
+  display: grid;
+  grid-column: 2;
+  gap: 12px;
+  padding: 18px;
+}
+
+.saved-panel h2 {
+  margin-bottom: 0;
+  font-size: 1rem;
+}
+
+.storage-message,
+.saved-empty {
+  margin: 0;
+  color: #5c675d;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.storage-message {
+  border-left: 4px solid #497562;
+  padding: 9px 10px;
+  background: #eef8f2;
+  color: #24523f;
+  font-weight: 800;
+}
+
+.saved-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.saved-game {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #e2dbcf;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbf9f4;
+  color: #17201b;
+  cursor: pointer;
+  text-align: left;
+}
+
+.saved-game:hover {
+  border-color: #9aab9d;
+  background: #f5f1e9;
+}
+
+.saved-game span {
+  overflow-wrap: anywhere;
+  font-weight: 900;
+}
+
+.saved-game small {
+  color: #667166;
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 .field-header,
@@ -271,6 +336,23 @@ dd {
   font-size: 0.86rem;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.save-button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border: 1px solid #aab5aa;
+  border-radius: 6px;
+  padding: 0 13px;
+  background: #fbf9f4;
+  color: #18201b;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.save-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .scoreboard {
@@ -519,6 +601,10 @@ dd {
     gap: 24px;
   }
 
+  .saved-panel {
+    grid-column: auto;
+  }
+
   .review-copy {
     padding-top: 0;
   }
@@ -546,6 +632,7 @@ dd {
   .pgn-panel,
   .summary-panel,
   .review-panel,
+  .saved-panel,
   .empty-result {
     padding: 16px;
   }

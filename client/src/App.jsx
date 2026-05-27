@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -16,13 +16,93 @@ function App() {
   const [parsedGame, setParsedGame] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [error, setError] = useState("");
+  const [storageMessage, setStorageMessage] = useState("");
+  const [savedGames, setSavedGames] = useState([]);
+  const [isLoadingSavedGames, setIsLoadingSavedGames] = useState(false);
+  const [isSavingGame, setIsSavingGame] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const canSubmit = useMemo(() => pgn.trim().length > 0 && !isSubmitting, [pgn, isSubmitting]);
 
+  useEffect(() => {
+    loadSavedGames();
+  }, []);
+
+  async function requestJson(path, options = {}) {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+      ...options,
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail ?? "Request failed.");
+    }
+
+    return data;
+  }
+
+  async function loadSavedGames() {
+    setIsLoadingSavedGames(true);
+    setStorageMessage("");
+
+    try {
+      const data = await requestJson("/api/games");
+      setSavedGames(data);
+    } catch (requestError) {
+      setStorageMessage(requestError.message);
+    } finally {
+      setIsLoadingSavedGames(false);
+    }
+  }
+
+  async function handleSaveGame() {
+    if (!analysisResult) {
+      return;
+    }
+
+    setIsSavingGame(true);
+    setStorageMessage("");
+
+    try {
+      await requestJson("/api/games", {
+        method: "POST",
+        body: JSON.stringify({
+          pgn,
+          analysis_result: analysisResult,
+        }),
+      });
+      await loadSavedGames();
+      setStorageMessage("Game saved.");
+    } catch (requestError) {
+      setStorageMessage(requestError.message);
+    } finally {
+      setIsSavingGame(false);
+    }
+  }
+
+  async function handleLoadSavedGame(gameId) {
+    setError("");
+    setStorageMessage("");
+
+    try {
+      const savedGame = await requestJson(`/api/games/${gameId}`);
+      setPgn(savedGame.pgn);
+      setParsedGame(savedGame.analysis_json.game);
+      setAnalysisResult(savedGame.analysis_json);
+      setStorageMessage("Saved review loaded.");
+    } catch (requestError) {
+      setStorageMessage(requestError.message);
+    }
+  }
+
   async function handleSubmit(event, mode = "parse") {
     event.preventDefault();
     setError("");
+    setStorageMessage("");
     setParsedGame(null);
     setAnalysisResult(null);
 
@@ -35,19 +115,10 @@ function App() {
 
     try {
       const endpoint = mode === "analyze" ? "/api/analyze-pgn" : "/api/parse-pgn";
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const data = await requestJson(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ pgn }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail ?? "Unable to parse that PGN.");
-      }
 
       if (mode === "analyze") {
         setParsedGame(data.game);
@@ -100,16 +171,63 @@ function App() {
             </button>
           </div>
         </form>
+
+        <SavedGamesPanel
+          games={savedGames}
+          isLoading={isLoadingSavedGames}
+          message={storageMessage}
+          onRefresh={loadSavedGames}
+          onSelect={handleLoadSavedGame}
+        />
       </section>
 
       <section className="result-section" aria-live="polite">
         {parsedGame ? (
-          <ParsedGameSummary game={parsedGame} analysisResult={analysisResult} />
+          <ParsedGameSummary
+            game={parsedGame}
+            analysisResult={analysisResult}
+            isSavingGame={isSavingGame}
+            onSaveGame={handleSaveGame}
+          />
         ) : (
           <EmptyResult />
         )}
       </section>
     </main>
+  );
+}
+
+function SavedGamesPanel({ games, isLoading, message, onRefresh, onSelect }) {
+  return (
+    <aside className="saved-panel" aria-label="Saved games">
+      <div className="field-header">
+        <h2>Saved games</h2>
+        <button type="button" className="text-button" onClick={onRefresh}>
+          Refresh
+        </button>
+      </div>
+
+      {message ? <p className="storage-message">{message}</p> : null}
+
+      {isLoading ? <p className="saved-empty">Loading saved games...</p> : null}
+
+      {!isLoading && games.length === 0 ? (
+        <p className="saved-empty">Saved reviews will appear here after Supabase is configured.</p>
+      ) : null}
+
+      <div className="saved-list">
+        {games.map((game) => (
+          <button type="button" className="saved-game" key={game.id} onClick={() => onSelect(game.id)}>
+            <span>
+              {game.white_player} vs {game.black_player}
+            </span>
+            <small>
+              {game.result} · {game.game_date ?? "Unknown date"}
+            </small>
+          </button>
+        ))}
+      </div>
+    </aside>
   );
 }
 
@@ -122,9 +240,16 @@ function EmptyResult() {
   );
 }
 
-function ParsedGameSummary({ game, analysisResult }) {
+function ParsedGameSummary({ game, analysisResult, isSavingGame, onSaveGame }) {
   if (analysisResult) {
-    return <GameReview game={game} analysisResult={analysisResult} />;
+    return (
+      <GameReview
+        game={game}
+        analysisResult={analysisResult}
+        isSavingGame={isSavingGame}
+        onSaveGame={onSaveGame}
+      />
+    );
   }
 
   const details = [
@@ -178,7 +303,7 @@ function ParsedGameSummary({ game, analysisResult }) {
   );
 }
 
-function GameReview({ game, analysisResult }) {
+function GameReview({ game, analysisResult, isSavingGame, onSaveGame }) {
   const labelCounts = getLabelCounts(analysisResult.analysis);
 
   return (
@@ -196,6 +321,9 @@ function GameReview({ game, analysisResult }) {
         <div className="engine-pill">
           {analysisResult.engine.name} · Depth {analysisResult.engine.depth}
         </div>
+        <button type="button" className="save-button" onClick={onSaveGame} disabled={isSavingGame}>
+          {isSavingGame ? "Saving..." : "Save review"}
+        </button>
       </header>
 
       <section className="scoreboard" aria-label="Move summary">
