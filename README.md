@@ -33,6 +33,12 @@ The third slice adds basic move classification:
 - Show Best, Excellent, Good, Inaccuracy, Mistake, or Blunder
 - Handle mate-style evaluations without breaking the analysis response
 
+The fourth slice adds a readable game review UI:
+
+- Show game metadata at the top of the review
+- Summarize move counts by classification
+- Display a move-by-move review list with labels, evals, and best moves
+
 No AI explanations, auth, or database are included yet.
 
 ## Local Development
