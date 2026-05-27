@@ -6,6 +6,7 @@ import chess
 import chess.engine
 import chess.pgn
 
+from .move_classifier import classify_move
 from .pgn_parser import PgnParseError, parse_pgn
 
 
@@ -107,19 +108,19 @@ def _analyze_moves(
         after_info = engine.analyse(board, limit)
         after_eval = _score_to_eval(after_info["score"])
 
-        rows.append(
-            {
-                "ply": ply_index + 1,
-                "moveNumber": move_number,
-                "side": side_to_move,
-                "move": played_san,
-                "uci": move.uci(),
-                "bestMove": best_move,
-                "evaluationBefore": before_eval,
-                "evaluationAfter": after_eval,
-                "centipawnLoss": _centipawn_loss(before_eval, after_eval, side_to_move),
-            }
-        )
+        analysis_row = {
+            "ply": ply_index + 1,
+            "moveNumber": move_number,
+            "side": side_to_move,
+            "move": played_san,
+            "uci": move.uci(),
+            "bestMove": best_move,
+            "evaluationBefore": before_eval,
+            "evaluationAfter": after_eval,
+            "centipawnLoss": _centipawn_loss(before_eval, after_eval, side_to_move),
+        }
+        analysis_row["classification"] = classify_move(analysis_row)
+        rows.append(analysis_row)
 
     return rows
 

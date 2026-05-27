@@ -27,7 +27,13 @@ The second slice adds raw Stockfish move analysis:
 - Return best move suggestions and centipawn loss
 - Display raw engine output in the frontend
 
-No move labels, AI explanations, auth, or database are included yet.
+The third slice adds basic move classification:
+
+- Label each analyzed move from centipawn loss
+- Show Best, Excellent, Good, Inaccuracy, Mistake, or Blunder
+- Handle mate-style evaluations without breaking the analysis response
+
+No AI explanations, auth, or database are included yet.
 
 ## Local Development
 

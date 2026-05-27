@@ -231,6 +231,49 @@ dd {
   padding-top: 22px;
 }
 
+.move-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: #edf0ea;
+  color: #2d372f;
+  font-size: 0.82rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.move-label-best {
+  background: #dcefe5;
+  color: #17613e;
+}
+
+.move-label-excellent {
+  background: #e4f0d2;
+  color: #4f6f16;
+}
+
+.move-label-good {
+  background: #e6edf7;
+  color: #2d557d;
+}
+
+.move-label-inaccuracy {
+  background: #fff1c9;
+  color: #835b00;
+}
+
+.move-label-mistake {
+  background: #ffe0cc;
+  color: #9b3f0f;
+}
+
+.move-label-blunder {
+  background: #ffe0e0;
+  color: #9c2222;
+}
+
 .moves-table {
   width: 100%;
   min-width: 520px;
