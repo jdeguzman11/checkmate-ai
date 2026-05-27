@@ -116,13 +116,17 @@ function App() {
 function EmptyResult() {
   return (
     <div className="empty-result">
-      <h2>Parsed game summary</h2>
-      <p>Submit a PGN to see player names, result, date, event, site, and moves.</p>
+      <h2>Game review</h2>
+      <p>Analyze a PGN to see game details, move quality counts, and a move-by-move review.</p>
     </div>
   );
 }
 
 function ParsedGameSummary({ game, analysisResult }) {
+  if (analysisResult) {
+    return <GameReview game={game} analysisResult={analysisResult} />;
+  }
+
   const details = [
     ["White", game.white],
     ["Black", game.black],
@@ -170,55 +174,92 @@ function ParsedGameSummary({ game, analysisResult }) {
           </tbody>
         </table>
       </div>
-
-      {analysisResult ? <EngineAnalysisTable analysisResult={analysisResult} /> : null}
     </div>
   );
 }
 
-function EngineAnalysisTable({ analysisResult }) {
+function GameReview({ game, analysisResult }) {
+  const labelCounts = getLabelCounts(analysisResult.analysis);
+
   return (
-    <div className="analysis-section">
-      <div className="summary-heading">
-        <h2>Stockfish analysis</h2>
-        <span>Depth {analysisResult.engine.depth}</span>
-      </div>
-      <div className="moves-table-wrap">
-        <table className="moves-table">
-          <thead>
-            <tr>
-              <th>Move</th>
-              <th>Played</th>
-              <th>Label</th>
-              <th>Eval before</th>
-              <th>Eval after</th>
-              <th>Best move</th>
-              <th>CP loss</th>
-            </tr>
-          </thead>
-          <tbody>
-            {analysisResult.analysis.map((move) => (
-              <tr key={move.ply}>
-                <td>
-                  {move.moveNumber}
-                  {move.side === "black" ? "..." : "."}
-                </td>
-                <td>{move.move}</td>
-                <td>
-                  <span className={`move-label move-label-${slugify(move.classification?.label)}`}>
-                    {move.classification?.label ?? "Good"}
-                  </span>
-                </td>
-                <td>{formatEvaluation(move.evaluationBefore)}</td>
-                <td>{formatEvaluation(move.evaluationAfter)}</td>
-                <td>{move.bestMove?.san ?? ""}</td>
-                <td>{move.centipawnLoss ?? ""}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="review-panel">
+      <header className="review-header">
+        <div>
+          <p className="eyebrow">Game Review</p>
+          <h2>
+            {game.white} vs {game.black}
+          </h2>
+          <p className="review-meta">
+            {game.result} · {game.date} · {game.event}
+          </p>
+        </div>
+        <div className="engine-pill">
+          {analysisResult.engine.name} · Depth {analysisResult.engine.depth}
+        </div>
+      </header>
+
+      <section className="scoreboard" aria-label="Move summary">
+        {LABEL_ORDER.map((label) => (
+          <div className={`score-card score-card-${slugify(label)}`} key={label}>
+            <span>{label}</span>
+            <strong>{labelCounts[label] ?? 0}</strong>
+          </div>
+        ))}
+      </section>
+
+      <section className="review-list-section" aria-labelledby="move-review-heading">
+        <div className="section-heading">
+          <h3 id="move-review-heading">Move List</h3>
+          <span>{analysisResult.analysis.length} analyzed moves</span>
+        </div>
+
+        <div className="move-review-list">
+          {analysisResult.analysis.map((move) => (
+            <MoveReviewItem move={move} key={move.ply} />
+          ))}
+        </div>
+      </section>
     </div>
+  );
+}
+
+function MoveReviewItem({ move }) {
+  const label = move.classification?.label ?? "Good";
+  const isBlackMove = move.side === "black";
+
+  return (
+    <article className={`move-review-item move-tone-${toneForLabel(label)}`}>
+      <div className="move-main">
+        <div className="move-index">
+          {move.moveNumber}
+          {isBlackMove ? "..." : "."}
+        </div>
+        <div className="move-played">
+          <strong>{move.move}</strong>
+          <span>{move.side}</span>
+        </div>
+        <span className={`move-label move-label-${slugify(label)}`}>{label}</span>
+      </div>
+
+      <div className="move-details">
+        <div>
+          <span>Before</span>
+          <strong>{formatEvaluation(move.evaluationBefore)}</strong>
+        </div>
+        <div>
+          <span>After</span>
+          <strong>{formatEvaluation(move.evaluationAfter)}</strong>
+        </div>
+        <div>
+          <span>Best</span>
+          <strong>{move.bestMove?.san ?? "N/A"}</strong>
+        </div>
+        <div>
+          <span>CP loss</span>
+          <strong>{move.centipawnLoss ?? "N/A"}</strong>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -233,6 +274,29 @@ function formatEvaluation(evaluation) {
 
 function slugify(value = "") {
   return value.toLowerCase().replace(/\s+/g, "-");
+}
+
+const LABEL_ORDER = ["Best", "Excellent", "Good", "Inaccuracy", "Mistake", "Blunder"];
+
+function getLabelCounts(analysis) {
+  return analysis.reduce(
+    (counts, move) => {
+      const label = move.classification?.label ?? "Good";
+      return {
+        ...counts,
+        [label]: (counts[label] ?? 0) + 1,
+      };
+    },
+    Object.fromEntries(LABEL_ORDER.map((label) => [label, 0])),
+  );
+}
+
+function toneForLabel(label) {
+  if (label === "Inaccuracy" || label === "Mistake" || label === "Blunder") {
+    return "warning";
+  }
+
+  return "positive";
 }
 
 export default App;
